@@ -62,15 +62,22 @@ public class DesktopLauncher {
 				SharedLibraryLoader.bitness = Architecture.Bitness._64;
 			}
 		}
-		
-		final String title;
-		if (DesktopLauncher.class.getPackage().getSpecificationTitle() == null){
-			title = System.getProperty("Specification-Title");
-		} else {
-			title = DesktopLauncher.class.getPackage().getSpecificationTitle();
-		}
-		
-		Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+
+        final String title;
+        String specTitle = (DesktopLauncher.class.getPackage() == null)
+                ? null
+                : DesktopLauncher.class.getPackage().getSpecificationTitle();
+
+        if (specTitle == null || specTitle.isBlank()) {
+            specTitle = System.getProperty("Specification-Title");
+        }
+        if (specTitle == null || specTitle.isBlank()) {
+            specTitle = "Gornicks Pixel Dungeon";
+        }
+        title = specTitle;
+
+
+        Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
 			@Override
 			public void uncaughtException(Thread thread, Throwable throwable) {
 				Game.reportException(throwable);
@@ -114,19 +121,29 @@ public class DesktopLauncher {
 				System.exit(1);
 			}
 		});
-		
-		Game.version = DesktopLauncher.class.getPackage().getSpecificationVersion();
-		if (Game.version == null) {
-			Game.version = System.getProperty("Specification-Version");
-		}
-		
-		try {
-			Game.versionCode = Integer.parseInt(DesktopLauncher.class.getPackage().getImplementationVersion());
-		} catch (NumberFormatException e) {
-			Game.versionCode = Integer.parseInt(System.getProperty("Implementation-Version"));
-		}
 
-		if (UpdateImpl.supportsUpdates()){
+        Game.version = DesktopLauncher.class.getPackage().getSpecificationVersion();
+        if (Game.version == null) {
+            Game.version = "DEV";
+        }
+
+        try {
+            String impl = DesktopLauncher.class
+                    .getPackage()
+                    .getImplementationVersion();
+
+            if (impl == null) {
+                Game.versionCode = 0;
+            } else {
+                Game.versionCode = Integer.parseInt(impl);
+            }
+
+        } catch (Exception e) {
+            Game.versionCode = 0;
+        }
+
+
+        if (UpdateImpl.supportsUpdates()){
 			Updates.service = UpdateImpl.getUpdateService();
 		}
 		if (NewsImpl.supportsNews()){
@@ -140,13 +157,10 @@ public class DesktopLauncher {
 		//if I were implementing this from scratch I would use the full implementation title for saves
 		// (e.g. /.shatteredpixel/shatteredpixeldungeon), but we have too much existing save
 		// date to worry about transferring at this point.
-		String vendor = DesktopLauncher.class.getPackage().getImplementationTitle();
-		if (vendor == null) {
-			vendor = System.getProperty("Implementation-Title");
-		}
-		vendor = vendor.split("\\.")[1];
+        String vendor = safeVendorSlug();
 
-		String basePath = "";
+
+        String basePath = "";
 		Files.FileType baseFileType = null;
 		if (SharedLibraryLoader.os == Os.Windows) {
 			if (System.getProperties().getProperty("os.name").equals("Windows XP")) {
@@ -191,4 +205,28 @@ public class DesktopLauncher {
 
 		new Lwjgl3Application(new ShatteredPixelDungeon(new DesktopPlatformSupport()), config);
 	}
+    private static String safeVendorSlug() {
+
+        String s = null;
+
+        Package p = DesktopLauncher.class.getPackage();
+        if (p != null) s = p.getImplementationTitle();
+
+        if (s == null || s.isBlank()) {
+            s = System.getProperty("Implementation-Title");
+        }
+
+        if (s == null || s.isBlank()) {
+            // DEV fallback — this is safe and stable
+            s = "com.gornick.gornickspixeldungeon";
+        }
+
+        String[] parts = s.split("\\.");
+        if (parts.length >= 2 && !parts[1].isBlank()) {
+            return parts[1];
+        }
+
+        return s.replaceAll("[^A-Za-z0-9._-]+", "_");
+    }
+
 }
